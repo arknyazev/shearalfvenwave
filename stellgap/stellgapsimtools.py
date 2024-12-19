@@ -46,6 +46,8 @@ class StellgapSimTools:
 
         return 0
     
+    # def load_alfven_spec_data()
+
     # def plot_continuum(normalized=False,*args,**kwargs):
 
 
