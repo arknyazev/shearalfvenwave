@@ -191,8 +191,8 @@ class ModeContinuum:
         self._check_matching_freqs()
 
     def _check_matching_freqs(self):
-        if not (self._s == None and self._freq == None):
-            if bool(self._s == None) != bool(self._freq == None) or (np.shape(self._s) != np.shape(self._freq)):
+        if not (self._s.size == 0 and self._s.size == 0):
+            if bool(self._s.size == 0) != bool(self._freq.size == 0) or (np.shape(self._s) != np.shape(self._freq)):
                 raise Exception("The number of flux surfaces and number of frequencies provided must be the same")
         
     def _check_negative_s(self):
@@ -526,12 +526,13 @@ def continuum_from_dir(directory: str) -> go.Figure:
     fig = plot_continuum(modes)
     return fig
 
+# TODO: remove this duplicate method
 def plot_continuum(modes: List[ModeContinuum], show_legend: bool = False) -> go.Figure:
     fig = go.Figure()
     for md in modes:
         fig.add_trace(go.Scatter(
-            x=md.s,
-            y=md.freq,
+            x=md.get_flux_surfaces(),
+            y=md.get_frequencies(),
             mode='markers',
             name=f'm={md.get_poloidal_mode()}, n={md.get_toroidal_mode()}',
             marker=dict(size=3),
@@ -543,7 +544,7 @@ def plot_continuum(modes: List[ModeContinuum], show_legend: bool = False) -> go.
     title=r'$\text{Continuum: }$',
     xaxis_title=r'$\text{Normalized flux }s$',
     yaxis_title=r'$\text{Frequency }\omega\text{ [kHz]}$',
-    xaxis=dict(range=[np.min([np.min(md.s) for md in modes]), np.max([np.max(md.s) for md in modes])]),
+    xaxis=dict(range=[np.min([np.min(md.get_flux_surfaces()) for md in modes]), np.max([np.max(md.get_flux_surfaces()) for md in modes])]),
     yaxis=dict(range=[0, 600]),
     legend=dict(
         title=r'$\text{Mode: }$',
