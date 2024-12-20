@@ -3,10 +3,12 @@ import numpy as np
 
 from continuum import PlasmaDat
 from continuum import FourierDat
+from continuum import AlfvenSpecData
 
 class StellgapSimTools:
     _plasma_data: PlasmaDat
     _fourier_data: FourierDat
+    _alfven_spec_data: AlfvenSpecData
 
     def __init__(self):
         """
@@ -15,12 +17,18 @@ class StellgapSimTools:
 
         return 0
     
-    def __init__(self, plasma_data: str, fourier_data: str):
+    def __init__(self, plasma_data = "", fourier_data = "", alfven_spec_data = ""):
         """
         TODO: info
         """
-        self.load_plasma_dat(plasma_data)
-        self.load_fourier_dat(fourier_data)
+        if plasma_data != "":
+            self.load_plasma_dat(plasma_data)
+
+        if fourier_data != "":
+            self.load_fourier_dat(fourier_data)
+
+        # if alfven_spec_data != "":
+            
 
         return 0
     
