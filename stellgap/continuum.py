@@ -173,14 +173,66 @@ egnout_form = {self.egnout_form}: Output form, used in AE3D, not in STELLGAP; Wh
         additional_info = "Available profiles are: 0 (iota/iota on axis squared), 1 (10th order polynomial fit), 2 (constant), 3 (formula based)."
         return f"{explanation} {additional_info}"
 
-@dataclass
-class Mode:
-    n: int
-    m: int
-    s: np.ndarray
-    freq: np.ndarray
+class ModeContinuum:
+    _n: int
+    _m: int
+    _s: np.array
+    _freq: np.array
 
+    def __init__(self, m: int, n: int, s = None, freq = None):
+        """
+        s and frequencies can be specified but are not necessary to initialize
+        """
+        self._m = m
+        self._n = n
+        self._s = s
+        self._freq = freq
 
+        self._check_matching_freqs()
+
+    def _check_matching_freqs(self):
+        if not (self._s.size == 0 and self._s.size == 0):
+            if bool(self._s.size == 0) != bool(self._freq.size == 0) or (np.shape(self._s) != np.shape(self._freq)):
+                raise Exception("The number of flux surfaces and number of frequencies provided must be the same")
+        
+    def _check_negative_s(self):
+        for s in self._s:
+            if s < 0:
+                self._negative_exception()
+            
+    def _negative_exception(self):
+        raise Exception("A negative flux label was provided. The flux label must be positive.")
+
+    def set_poloidal_mode(self, m: int):
+        self._m = m
+
+    def set_toroidal_mode(self, n: int):
+        self._n = n
+
+    def set_points(self, s: np.array, freq: np.array):
+        self._s = s
+        self._freq = freq
+
+        self._check_matching_freqs()
+
+    def get_poloidal_mode(self):
+        return self._m
+
+    def get_toroidal_mode(self):
+        return self._n
+    
+    def get_flux_surfaces(self):
+        return self._s
+    
+    def get_frequencies(self):
+        return self._freq
+    
+    def add_point(self, s: float, freq: float):
+        if s < 0:
+            self._negative_exception
+
+        self._s = np.append(self._s, s)
+        self._freq = np.append(self._freq, freq)
 
 @dataclass
 class TaeDataBoozer:
@@ -438,10 +490,10 @@ class AlfvenSpecData(np.ndarray):
         """Sort the array based on the 's' field."""
         return self[np.argsort(self['s'])]
     
-    def get_modes(self) -> List[Mode]:
+    def get_modes(self) -> List[ModeContinuum]:
         data = self.nonzero_beta()
         modes = [
-            Mode(
+            ModeContinuum(
                 n=n, 
                 m=m, 
                 s=(filtered_data := np.sort(data[(data['n'] == n) & (data['m'] == m)], order='s'))['s'], 
@@ -474,14 +526,15 @@ def continuum_from_dir(directory: str) -> go.Figure:
     fig = plot_continuum(modes)
     return fig
 
-def plot_continuum(modes: List[Mode], show_legend: bool = False) -> go.Figure:
+# TODO: remove this duplicate method
+def plot_continuum(modes: List[ModeContinuum], show_legend: bool = False) -> go.Figure:
     fig = go.Figure()
     for md in modes:
         fig.add_trace(go.Scatter(
-            x=md.s,
-            y=md.freq,
+            x=md.get_flux_surfaces(),
+            y=md.get_frequencies(),
             mode='markers',
-            name=f'm={md.m}, n={md.n}',
+            name=f'm={md.get_poloidal_mode()}, n={md.get_toroidal_mode()}',
             marker=dict(size=3),
             line=dict(width=0.5)  # Equivalent to lw in matplotlib
         ))
@@ -491,7 +544,7 @@ def plot_continuum(modes: List[Mode], show_legend: bool = False) -> go.Figure:
     title=r'$\text{Continuum: }$',
     xaxis_title=r'$\text{Normalized flux }s$',
     yaxis_title=r'$\text{Frequency }\omega\text{ [kHz]}$',
-    xaxis=dict(range=[np.min([np.min(md.s) for md in modes]), np.max([np.max(md.s) for md in modes])]),
+    xaxis=dict(range=[np.min([np.min(md.get_flux_surfaces()) for md in modes]), np.max([np.max(md.get_flux_surfaces()) for md in modes])]),
     yaxis=dict(range=[0, 600]),
     legend=dict(
         title=r'$\text{Mode: }$',
