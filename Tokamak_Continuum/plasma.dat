@@ -1,0 +1,8 @@
+
+&plasma_input
+ ion_to_proton_mass = 1., ion_density_0 = 0.66e+19,
+ ion_profile = 2, jdqz_data = T,
+ egnout_form = "asci",
+ nion = 1.0 0.0 0.0 0.0 0.0 -1.0 0.0 0.0 0.0 0.0,
+ aion = 0.5, bion = 1.5, cion = 4.
+/
