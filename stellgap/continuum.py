@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import warnings
 
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import f90nml
 import scipy.sparse as sp
 
@@ -73,6 +73,9 @@ class FourierDat:
 
     def __str__(self):
         return self.explain()
+    
+    def get_total_mode_number(self):
+        return np.sum([m_max-m_min+1 for n, m_min, m_max in self.mode_definitions])
 
     def explain(self):
         return f"""***Original Content***
@@ -86,12 +89,12 @@ nt_col = {len(self.mode_definitions)} - number of mode definitions; determines h
 mode_family = {self.mode_family} - this number is currently not used in calculation, but read by code
 Mode Definitions: {self.mode_definitions}
         """
-    
+
 @dataclass
 class PlasmaDat:
     """
     Represents the plasma configuration for a STELLGAP run as specified in a plasma.dat file.
-    
+
     Attributes:
         ion_to_proton_mass (float): Mass ratio of ion to proton (m_ion/m_proton).
         ion_density_0 (float): Ion density (in m**-3) at the magnetic axis.
@@ -110,7 +113,7 @@ class PlasmaDat:
 
     The class parses and stores data from a Fortran namelist formatted file (plasma.dat) used to configure plasma parameters for simulation runs.
     """
-    
+
     ion_to_proton_mass: float
     ion_density_0: float
     ion_profile: int
@@ -128,7 +131,7 @@ class PlasmaDat:
             content = file.read()
         namelist = f90nml.reads(content)
         plasma_input = namelist['plasma_input']
-        
+
         # Extract parameters, handle optional ones with defaults
         aion = plasma_input.get('aion', 0.0)
         bion = plasma_input.get('bion', 0.0)
@@ -173,66 +176,14 @@ egnout_form = {self.egnout_form}: Output form, used in AE3D, not in STELLGAP; Wh
         additional_info = "Available profiles are: 0 (iota/iota on axis squared), 1 (10th order polynomial fit), 2 (constant), 3 (formula based)."
         return f"{explanation} {additional_info}"
 
-class ModeContinuum:
-    _n: int
-    _m: int
-    _s: np.array
-    _freq: np.array
+@dataclass
+class Mode:
+    n: int
+    m: int
+    s: np.ndarray
+    freq: np.ndarray
 
-    def __init__(self, m: int, n: int, s = None, freq = None):
-        """
-        s and frequencies can be specified but are not necessary to initialize
-        """
-        self._m = m
-        self._n = n
-        self._s = s
-        self._freq = freq
 
-        self._check_matching_freqs()
-
-    def _check_matching_freqs(self):
-        if not (self._s.size == 0 and self._s.size == 0):
-            if bool(self._s.size == 0) != bool(self._freq.size == 0) or (np.shape(self._s) != np.shape(self._freq)):
-                raise Exception("The number of flux surfaces and number of frequencies provided must be the same")
-        
-    def _check_negative_s(self):
-        for s in self._s:
-            if s < 0:
-                self._negative_exception()
-            
-    def _negative_exception(self):
-        raise Exception("A negative flux label was provided. The flux label must be positive.")
-
-    def set_poloidal_mode(self, m: int):
-        self._m = m
-
-    def set_toroidal_mode(self, n: int):
-        self._n = n
-
-    def set_points(self, s: np.array, freq: np.array):
-        self._s = s
-        self._freq = freq
-
-        self._check_matching_freqs()
-
-    def get_poloidal_mode(self):
-        return self._m
-
-    def get_toroidal_mode(self):
-        return self._n
-    
-    def get_flux_surfaces(self):
-        return self._s
-    
-    def get_frequencies(self):
-        return self._freq
-    
-    def add_point(self, s: float, freq: float):
-        if s < 0:
-            self._negative_exception
-
-        self._s = np.append(self._s, s)
-        self._freq = np.append(self._freq, freq)
 
 @dataclass
 class TaeDataBoozer:
@@ -294,22 +245,22 @@ class TaeDataBoozer:
     def load_data(self):
         dtype = np.dtype([
         ('ks', int), ('iota', 'f8'), ('phip', 'f8'), ('jtor', 'f8'), ('jpol', 'f8'),
-        ('thetang', ('f8', self.nznt)), ('zetang', ('f8', self.nznt)), 
+        ('thetang', ('f8', self.nznt)), ('zetang', ('f8', self.nznt)),
         ('bfield', ('f8', self.nznt)), ('gsssup', ('f8', self.nznt)), ('gtzsup', ('f8', self.nznt)),
-        ('gttsup', ('f8', self.nznt)), ('gzzsup', ('f8', self.nznt)), 
+        ('gttsup', ('f8', self.nznt)), ('gzzsup', ('f8', self.nznt)),
         ('gstsup', ('f8', self.nznt)), ('gszsup', ('f8', self.nznt)), ('rjacob', ('f8', self.nznt))
         ])
         data = np.zeros(self.surfs, dtype=dtype)
         with open(self.file_path, 'r') as file:
             for i in range(self.surfs):
-                tae_data_block0 = np.loadtxt(file, max_rows=1, 
+                tae_data_block0 = np.loadtxt(file, max_rows=1,
                     dtype=np.dtype([('ks', int), ('iota', 'f8'), ('phip', 'f8'), ('jtor', 'f8'), ('jpol', 'f8')]))
                 tae_data_block1 = []
                 tae_data_block2 = []
                 for _ in range(self.nznt):
-                    tae_data_block1.append(np.loadtxt(file, max_rows=1, 
+                    tae_data_block1.append(np.loadtxt(file, max_rows=1,
                         dtype=np.dtype([('thetang', 'f8'), ('zetang', 'f8'), ('bfield', 'f8'), ('gsssup', 'f8'), ('gtzsup', 'f8')])))
-                    tae_data_block2.append(np.loadtxt(file, max_rows=1, 
+                    tae_data_block2.append(np.loadtxt(file, max_rows=1,
                         dtype=np.dtype([('gttsup', 'f8'), ('gzzsup', 'f8'), ('gstsup', 'f8'), ('gszsup', 'f8'), ('rjacob', 'f8')])))
                 tae_data_block1 = np.array(tae_data_block1)
                 tae_data_block2 = np.array(tae_data_block2)
@@ -333,7 +284,7 @@ class TaeDataBoozer:
         if self.array.size == 0:
             warnings.warn(f"File {self.file_path} is empty")
 
-    
+
 @dataclass
 class AeMetricData:
     sim_dir: str
@@ -383,13 +334,13 @@ class AeMetricData:
             numbers = list(map(int, first_line.split()))
             self.surfs, self.izeta, self.itheta, self.nznt = numbers[0:4]
 
-            surface_data = np.loadtxt(file, max_rows=self.surfs, 
+            surface_data = np.loadtxt(file, max_rows=self.surfs,
                 dtype=np.dtype([
                     ('iota', 'f8'), ('iotapf', 'f8'), ('jpol', 'f8'),
                     ('jpolpf', 'f8'), ('jtor', 'f8'), ('jtorpf', 'f8'),
                     ('phip', 'f8'), ('phippf', 'f8')
                 ]))
-            
+
             dtype = np.dtype([
                 ('iota', 'f8'), ('iotapf', 'f8'), ('jpol', 'f8'),
                 ('jpolpf', 'f8'), ('jtor', 'f8'), ('jtorpf', 'f8'),
@@ -402,7 +353,7 @@ class AeMetricData:
             ])
 
             data = np.zeros(self.surfs, dtype=dtype)
-            
+
             for field in surface_data.dtype.names:
                 data[field] = surface_data[field]
 
@@ -413,7 +364,7 @@ class AeMetricData:
                 ('bfields', 'f8'), ('bfieldth', 'f8'), ('bfieldze', 'f8')]))
                 for field in surf_metric_data_block.dtype.names:
                     data[i][field] = surf_metric_data_block[field]
-                
+
             jprl_data_block = np.loadtxt(file, max_rows=self.surfs, dtype=np.dtype([
                 ('jprl_coef0', 'f8'), ('jprl_coef1', 'f8'), ('jprl_coef2', 'f8'), ('prespf', 'f8')]))
 
@@ -426,6 +377,37 @@ class AeMetricData:
                     data[i][field] = brho_data_block[field]
 
         return data
+
+    def write_to_ae_metric(self, output_path=None):
+            """Write data to file, aiming to preserve original Fortran format of ae_metric.dat"""
+            if output_path is None:
+                output_path = self.file_path
+            print(f"writing to {output_path}...")
+            with open(output_path, 'w') as file:
+                file.write(f"{self.surfs:5d}{self.izeta:11d}{self.itheta:11d}{self.nznt:11d}\n")
+                print(f'self.surfs = {self.surfs}')
+                for i in range(self.surfs):
+                    print(f'frite for surf i={i}')
+                    file.write((f"{self.array['iota'][i]:15.7E}{self.array['iotapf'][i]:15.7E}"
+                                f"{self.array['jpol'][i]:15.7E}{self.array['jpolpf'][i]:15.7E}"
+                                f"{self.array['jtor'][i]:15.7E}{self.array['jtorpf'][i]:15.7E}"
+                                f"{self.array['phip'][i]:15.7E}{self.array['phippf'][i]:15.7E}\n"))
+                for i in range(self.surfs):
+                    for j in range(self.nznt):
+                        file.write((f"{self.array['rjacob'][i][j]:15.7E}{self.array['bfield'][i][j]:15.7E}"
+                                    f"{self.array['gsssup'][i][j]:15.7E}{self.array['gttsup'][i][j]:15.7E}"
+                                    f"{self.array['gzzsup'][i][j]:15.7E}{self.array['gstsup'][i][j]:15.7E}"
+                                    f"{self.array['gszsup'][i][j]:15.7E}{self.array['gtzsup'][i][j]:15.7E}"
+                                    f"{self.array['bfields'][i][j]:15.7E}{self.array['bfieldth'][i][j]:15.7E}"
+                                    f"{self.array['bfieldze'][i][j]:15.7E}\n"))
+
+                for i in range(self.surfs):
+                    file.write(f"{self.array['jprl_coef0'][i]:15.7E}{self.array['jprl_coef1'][i]:15.7E}"
+                               f"{self.array['jprl_coef2'][i]:15.7E}{self.array['prespf'][i]:15.7E}\n")
+
+                for i in range(self.surfs):
+                    for j in range(self.nznt):
+                        file.write(f"{self.array['brho'][i][j]:15.7E}\n")
 
 @dataclass
 class ModesOutput:
@@ -473,7 +455,7 @@ class AlfvenSpecData(np.ndarray):
                            for fname in filenames])
         obj = np.asarray(data).view(cls)
         return obj
-    
+
     @classmethod
     def from_dir(cls, directory: str):
         """Load all alfven_spec data from a specified directory."""
@@ -489,20 +471,20 @@ class AlfvenSpecData(np.ndarray):
     def sort_by_s(self):
         """Sort the array based on the 's' field."""
         return self[np.argsort(self['s'])]
-    
-    def get_modes(self) -> List[ModeContinuum]:
+
+    def get_modes(self) -> List[Mode]:
         data = self.nonzero_beta()
         modes = [
-            ModeContinuum(
-                n=n, 
-                m=m, 
-                s=(filtered_data := np.sort(data[(data['n'] == n) & (data['m'] == m)], order='s'))['s'], 
+            Mode(
+                n=n,
+                m=m,
+                s=(filtered_data := np.sort(data[(data['n'] == n) & (data['m'] == m)], order='s'))['s'],
                 freq=np.sqrt(np.abs(filtered_data['ar'] / filtered_data['beta']))
             )
             for n, m in {(a['n'], a['m']) for a in data}
         ]
         return modes
-    
+
     def condition_number(self):
         '''For each s, compute the condition number as ratio of larget to smallest eigenvalue
         return the array of s and corresponding condition numbers.'''
@@ -526,26 +508,33 @@ def continuum_from_dir(directory: str) -> go.Figure:
     fig = plot_continuum(modes)
     return fig
 
-# TODO: remove this duplicate method
-def plot_continuum(modes: List[ModeContinuum], show_legend: bool = False) -> go.Figure:
+def plot_continuum(modes: List[Mode], show_legend: bool = False, normalized_modes = False, yrange= None) -> go.Figure:
     fig = go.Figure()
     for md in modes:
         fig.add_trace(go.Scatter(
-            x=md.get_flux_surfaces(),
-            y=md.get_frequencies(),
+            x=md.s,
+            y=md.freq,
             mode='markers',
-            name=f'm={md.get_poloidal_mode()}, n={md.get_toroidal_mode()}',
+            name=f'm={md.m}, n={md.n}',
             marker=dict(size=3),
             line=dict(width=0.5)  # Equivalent to lw in matplotlib
         ))
 
+    if normalized_modes:
+        yaxis_title = r'$\text{normalized frequency }\omega/\omega_A$'
+        yaxis_range = [0,5]
+    else:
+        yaxis_title = r'$\text{Frequency }\omega\text{ [kHz]}$'
+        yaxis_range = [0,600]
+    if not yrange is None:
+        yaxis_range = yrange
     fig.update_layout(
     autosize=True,
     title=r'$\text{Continuum: }$',
     xaxis_title=r'$\text{Normalized flux }s$',
-    yaxis_title=r'$\text{Frequency }\omega\text{ [kHz]}$',
-    xaxis=dict(range=[np.min([np.min(md.get_flux_surfaces()) for md in modes]), np.max([np.max(md.get_flux_surfaces()) for md in modes])]),
-    yaxis=dict(range=[0, 600]),
+    yaxis_title=yaxis_title,
+    xaxis=dict(range=[np.min([np.min(md.s) for md in modes]), np.max([np.max(md.s) for md in modes])]),
+    yaxis=dict(range=yaxis_range),
     legend=dict(
         title=r'$\text{Mode: }$',
         yanchor="top",
@@ -706,7 +695,7 @@ class IonProfile:
             ion_profile_data[:, 3]   # Alfven speed
         ], dtype=dtype)
         return cls(array=array)
-    
+
 @dataclass
 class EgnvaluesDat:
     sim_dir: str
@@ -741,7 +730,7 @@ class EgnvaluesDat:
         data['eigenvalue'][positive_indices] = np.square(data['eigenvalue'][positive_indices])
 
         return data
-    
+
     def condition_number(self):
         eigenvalues = self.array['eigenvalue']
         abs_eigenvalues = np.abs(eigenvalues)
@@ -773,7 +762,7 @@ class FieldBendingMatrix:
 
         with open(self.file_path, 'r') as file:
             data = np.loadtxt(file, dtype=[('i', int), ('j', int), ('value', float)])
-        
+
         # Adjust indices for 0-based indexing in Python (if original indices are 1-based)
         rows = data['i'] - 1
         cols = data['j'] - 1
@@ -807,7 +796,7 @@ class InertiaMatrix:
 
         with open(self.file_path, 'r') as file:
             data = np.loadtxt(file, dtype=[('i', int), ('j', int), ('value', float)])
-        
+
         # Adjust indices for 0-based indexing in Python (if original indices are 1-based)
         rows = data['i'] - 1
         cols = data['j'] - 1
@@ -818,11 +807,48 @@ class InertiaMatrix:
 
         # Create the COO sparse matrix
         return sp.coo_matrix((values, (rows, cols)), shape=(size, size))
-    
+
+def make_EigModeASCI_egn_vectors(eigenvalues, eigenvectors, fd:FourierDat):
+    '''
+    Takes output of AE3D solve
+    eigenvalues, eigenvectors = np.linalg.eig(np.linalg.inv(G) @ F)
+    and FourierDat object, and produces egn_vector attribute for EigModeASCI
+    '''
+    num_eigs = len(eigenvalues)
+    total_modes = fd.get_total_mode_number()
+    Ns = int(len(eigenvalues) / total_modes)
+    egn_vectors = np.zeros((num_eigs,Ns,total_modes))
+    for ev_num, ev in enumerate(eigenvalues):
+        for mode_num, (n, m) in enumerate(((n, m) for n, m_min, m_max in fd.mode_definitions for m in range(m_min, m_max+1))):
+            egn_vectors[ev_num,:,mode_num] = np.array([eigenvectors[:,ev_num][mode_num+ns*total_modes] for ns in range(Ns)])
+    return egn_vectors
+
+def numpy_eig_to_EigModeASCI(G : np.ndarray, F : np.ndarray, fd:FourierDat):
+    '''
+    Takes InertiaMatrix G, FieldBendingMatrix F;
+    solves eigenproblem omega*omega G x = Fx,
+    and saves x in EigModeASCI format
+    '''
+    eigenvalues, eigenvectors = np.linalg.eig(np.linalg.inv(G) @ F)
+    num_eigs = len(eigenvalues)
+    total_modes = fd.get_total_mode_number()
+    Ns = int(len(eigenvalues) / total_modes)
+    return EigModeASCI.from_data(
+        num_eigenmodes=num_eigs,
+        num_fourier_modes = total_modes,
+        num_radial_points=Ns,
+        modes = np.array(
+        [(n, m)for n, m_min, m_max in fd.mode_definitions for m in range(m_min, m_max+1)],
+        dtype=[('m', 'int32'), ('n', 'int32')]),
+        egn_values= eigenvalues.real,
+        s_coords=np.linspace(0,1.0,Ns+1,endpoint=False)[1:],
+        egn_vectors=make_EigModeASCI_egn_vectors(eigenvalues.real,eigenvectors.real,fd)
+    )
+
 @dataclass
 class JDQZData:
     """
-    A class to handle the parsing and storage of JDQZ simulation data from a file. This file contains 
+    A class to handle the parsing and storage of JDQZ simulation data from a file. This file contains
     multiple sections including the number of surfaces, mode numbers, and normalized toroidal flux values.
 
     Attributes:
@@ -847,7 +873,7 @@ class JDQZData:
 
     def load_data(self):
         """
-        Loads data from the 'jdqz_data.dat' file, including number of surfaces, mode numbers, and 
+        Loads data from the 'jdqz_data.dat' file, including number of surfaces, mode numbers, and
         normalized toroidal flux values. Raises an error if the file is not found.
         """
         if not os.path.isfile(self.file_path):
@@ -886,7 +912,7 @@ class Omega2Dat:
         """
         if not os.path.isfile(self.file_path):
             raise FileNotFoundError(f"Data file {self.file_path} not found.")
-        
+
         # Load the data using the predefined dtype
         dtype = [
             ('index', int),
@@ -896,13 +922,13 @@ class Omega2Dat:
             ('dm', 'f8')       # Eigenvalue computed as alphai/betar
         ]
         data = np.loadtxt(self.file_path, dtype=dtype)
-        
+
         # Ensure that the imaginary parts are indeed zero (or close to zero)
         if np.any(np.abs(data['alphai']) > 1e-10):
             raise ValueError("Non-zero imaginary components found in an ideal MHD scenario.")
 
         return data
-    
+
 @dataclass
 class EigModeASCI:
     """
@@ -920,8 +946,8 @@ class EigModeASCI:
         s_coords (np.ndarray): Radial coordinate values.
         egn_vectors (np.ndarray): Eigenvector data reshaped according to the dimensions.
     """
-    sim_dir: str
-    file_path: str = field(init=False)
+    sim_dir: Optional[str] = None
+    file_path: Optional[str] = field(init=False, default=None)
     num_eigenmodes: int = field(init=False)
     num_fourier_modes: int = field(init=False)
     num_radial_points: int = field(init=False)
@@ -931,13 +957,26 @@ class EigModeASCI:
     egn_vectors: np.ndarray = field(init=False)
 
     def __post_init__(self):
-        self.file_path = os.path.join(self.sim_dir, 'egn_mode_asci.dat')
-        self.load_data()
+        if self.sim_dir is not None:
+            self.file_path = os.path.join(self.sim_dir, 'egn_mode_asci.dat')
+            self.load_data()
+
+    @classmethod
+    def from_data(cls, num_eigenmodes, num_fourier_modes, num_radial_points, modes, egn_values, s_coords, egn_vectors):
+        instance = cls(sim_dir=None)
+        instance.num_eigenmodes = num_eigenmodes
+        instance.num_fourier_modes = num_fourier_modes
+        instance.num_radial_points = num_radial_points
+        instance.modes = modes
+        instance.egn_values = egn_values
+        instance.s_coords = s_coords
+        instance.egn_vectors = egn_vectors
+        return instance
 
     def load_data(self):
         if not os.path.isfile(self.file_path):
             raise FileNotFoundError(f"Data file {self.file_path} not found.")
-        
+
         data = np.loadtxt(self.file_path)
         it = iter(data)
         self.num_eigenmodes = int(next(it))
@@ -970,7 +1009,7 @@ class EigModeASCI:
         modes_sorted = self.modes[sort_by_energy]
         normalized_egn_vector = egn_vector_sorted / egn_vector_sorted[np.argmax(np.abs(egn_vector_sorted[:, 0])), 0]
         return nearest_egn_value, normalized_egn_vector, modes_sorted
-    
+
     def condition_number(self):
         eigenvalues = self.egn_values
         abs_eigenvalues = np.abs(eigenvalues)
@@ -979,7 +1018,7 @@ class EigModeASCI:
         if min_eigenvalue == 0:
             raise ValueError("The smallest absolute eigenvalue is zero, condition number is undefined.")
         return max_eigenvalue / min_eigenvalue
-    
+
 @dataclass
 class Harmonic:
     """
@@ -1027,6 +1066,47 @@ class AE3DEigenvector:
             for i in range(len(modes_sorted))
         ]
         return AE3DEigenvector(eigenvalue=egn_value, s_coords=eig_mode_asci.s_coords, harmonics=harmonics)
+    
+    def export_to_numpy(self, filename: str, num_harmonics: int = None, resolution_step: int = 1):
+        """
+        Exports the harmonics to a NumPy file.
+
+        Args:
+            filename (str): The name of the file to export to.
+            num_harmonics (int, optional): The number of harmonics to export. If None, all harmonics are exported.
+        """
+        num_harmonics = num_harmonics or len(self.harmonics)
+        harmonics_data = {
+            'eigenvalue': self.eigenvalue,
+            's_coords': self.s_coords[0:-1:resolution_step],
+            'harmonics': np.array([
+                (h.m, h.n, h.amplitudes[0:-1:resolution_step]) for h in self.harmonics[:num_harmonics]
+            ], dtype=object)
+        }
+        np.save(filename, harmonics_data)
+        print(f'Harmonics exported to {filename}')
+
+    @classmethod
+    def load_from_numpy(cls, filename: str):
+        """
+        Loads harmonics from a NumPy file into an AE3DEigenvector instance.
+
+        Args:
+            filename (str): The name of the file to load from.
+
+        Returns:
+            AE3DEigenvector: An instance of AE3DEigenvector with loaded data.
+        """
+        harmonics_data = np.load(filename, allow_pickle=True).item()
+        harmonics = [
+            Harmonic(m=m, n=n, amplitudes=amplitudes) 
+            for m, n, amplitudes in harmonics_data['harmonics']
+        ]
+        return cls(
+            eigenvalue=harmonics_data['eigenvalue'],
+            s_coords=harmonics_data['s_coords'],
+            harmonics=harmonics
+        )
 
 def plot_ae3d_eigenmode(mode: AE3DEigenvector, harmonics: int = 5):
     """
@@ -1109,6 +1189,94 @@ class FAR3DEigenproblem:
         values = data['value']
 
         return sp.coo_matrix((values, (rows, cols)), shape=(self.matrix_size, self.matrix_size))
+
+
+def continuum_from_ae3d(ae3d : EigModeASCI, minevalue = 0.0, maxevalue = 600**2):
+    ModeList = []
+    mn_set = set()
+
+    for evalue in ae3d.egn_values:
+        if evalue < minevalue:
+            continue
+        if evalue > maxevalue:
+            continue
+        evec = AE3DEigenvector.from_eig_mode_asci(ae3d, evalue)
+        m, n = evec.harmonics[0].m, evec.harmonics[0].n
+        if (m, n) in mn_set:
+            for mode in ModeList:
+                if mode.m == m and mode.n == n:
+                    break
+            mode.s.append(evec.s_coords[np.where(evec.harmonics[0].amplitudes==np.max(evec.harmonics[0].amplitudes))[0][0]])
+            mode.freq.append(np.sqrt(evalue))
+        else:
+            mn_set.add((m, n))
+            ModeList.append(Mode(
+                n  = evec.harmonics[0].n,
+                m  = evec.harmonics[0].m,
+                s = [evec.s_coords[np.where(evec.harmonics[0].amplitudes==np.max(evec.harmonics[0].amplitudes))[0][0]]],
+                freq = [np.sqrt(evalue)]
+            ))
+    return ModeList
+
+
+import plotly.graph_objects as go
+import numpy as np
+from typing import List
+
+def plot_continua(overlays: List[List[Mode]], show_legend: bool = False, normalized_modes=False, yrange=None) -> go.Figure:
+    fig = go.Figure()
+    
+    colors = ['blue', 'red', 'green', 'purple']  # Add more colors if needed
+    markers = ['circle', 'square', 'diamond', 'cross']  # Add more marker types if needed
+    
+    for idx, modes in enumerate(overlays):
+        color = colors[idx % len(colors)]
+        marker = markers[idx % len(markers)]
+        
+        for md in modes:
+            formatted_freq = [f"{f:.10g}" for f in md.freq]
+            fig.add_trace(go.Scatter(
+                x=md.s,
+                y=md.freq,
+                mode='markers',
+                name=f'm={md.m}, n={md.n} (Overlay {idx+1})',
+                marker=dict(size=3, symbol=marker, color=color),
+                line=dict(width=0.5, color=color),
+                text=[f"freq = {f}, m={md.m}, n={md.n}" for f in formatted_freq],  # Add formatted y-values as hover text
+                hoverinfo="text+x+y"  # Display text along with x and y values
+            ))
+
+    if normalized_modes:
+        yaxis_title = r'$\text{normalized frequency }\omega/\omega_A$'
+        yaxis_range = [0, 5]
+    else:
+        yaxis_title = r'$\text{Frequency }\omega\text{ [kHz]}$'
+        yaxis_range = [0, 600]
+    
+    if yrange is not None:
+        yaxis_range = yrange
+    
+    fig.update_layout(
+        autosize=True,
+        title=r'$\text{Continuum: }$',
+        xaxis_title=r'$\text{Normalized flux }s$',
+        yaxis_title=yaxis_title,
+        xaxis=dict(range=[np.min([np.min(md.s) for modes in overlays for md in modes]), 
+                          np.max([np.max(md.s) for modes in overlays for md in modes])]),
+        yaxis=dict(range=yaxis_range),
+        legend=dict(
+            title=r'$\text{Mode: }$',
+            yanchor="top",
+            y=1.4,
+            xanchor="center",
+            x=0.5,
+            orientation="h"
+        ),
+        showlegend=show_legend
+    )
+    
+    return fig
+
 
 if __name__ == '__main__':
     fig = plot_continuum(data_from_dir(os.getcwd()).get_modes())

@@ -1,0 +1,10 @@
+README.md
+setup.py
+stellgap/__init__.py
+stellgap/continuum.py
+stellgap/simsopt.py
+stellgap.egg-info/PKG-INFO
+stellgap.egg-info/SOURCES.txt
+stellgap.egg-info/dependency_links.txt
+stellgap.egg-info/requires.txt
+stellgap.egg-info/top_level.txt

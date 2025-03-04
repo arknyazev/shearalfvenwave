@@ -1,0 +1,9 @@
+Metadata-Version: 2.1
+Name: stellgap
+Version: 0.2.0
+Summary: A package to work with STELLGAP output
+Author: Alex Knayzev
+Author-email: a.knyazev@columbia.edu
+Keywords: physics plasma alfven continuum
+Requires-Dist: numpy
+Requires-Dist: plotly
