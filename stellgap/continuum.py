@@ -172,6 +172,39 @@ egnout_form = {self.egnout_form}: Output form, used in AE3D, not in STELLGAP; Wh
         explanation = profiles.get(self.ion_profile, "Unknown profile")
         additional_info = "Available profiles are: 0 (iota/iota on axis squared), 1 (10th order polynomial fit), 2 (constant), 3 (formula based)."
         return f"{explanation} {additional_info}"
+    
+    def get_ion_profile_function(self):
+        """
+        Returns a function f(s) that represents the ion density profile as a function of normalized toroidal flux s.
+        
+        The returned function gives the ratio of ion density at position s to ion density at the axis: n_ion(s)/n_ion(0)
+        
+        Returns:
+            callable: A function that takes normalized toroidal flux s and returns the normalized ion density.
+        """
+        if self.ion_profile == 0:
+            return ValueError(f"Need iota profile: {self.ion_profile}")
+            
+        elif self.ion_profile == 1:
+            def polynomial_profile(s):
+                result = 0.0
+                for i, coef in enumerate(self.nion):
+                    if i < 9:
+                        result += coef * (rho ** i)
+                return result
+            return polynomial_profile
+            
+        elif self.ion_profile == 2:
+            return lambda s: 1.0
+            
+        elif self.ion_profile == 3:
+            def custom_profile(s):
+                rho = np.sqrt(s)
+                return (1.0 - self.aion * (rho ** self.bion)) ** self.cion
+            return custom_profile
+            
+        else:
+            raise ValueError(f"Unknown ion_profile: {self.ion_profile}")
 
 class ModeContinuum:
     _n: int
@@ -527,7 +560,7 @@ def continuum_from_dir(directory: str) -> go.Figure:
     return fig
 
 # TODO: remove this duplicate method
-def plot_continuum(modes: List[ModeContinuum], show_legend: bool = False) -> go.Figure:
+def plot_continuum(modes: List[ModeContinuum], show_legend: bool = False, normalized_modes = False, yrange= None) -> go.Figure:
     fig = go.Figure()
     for md in modes:
         fig.add_trace(go.Scatter(
@@ -536,16 +569,32 @@ def plot_continuum(modes: List[ModeContinuum], show_legend: bool = False) -> go.
             mode='markers',
             name=f'm={md.get_poloidal_mode()}, n={md.get_toroidal_mode()}',
             marker=dict(size=3),
-            line=dict(width=0.5)  # Equivalent to lw in matplotlib
+            line=dict(width=0.5),
+            hoverlabel=dict(
+                    font_size=16,
+                    bgcolor="white"
+                )
         ))
 
+    if normalized_modes:
+        yaxis_title = r'$\text{normalized frequency }\omega/\omega_A$'
+        yaxis_range = [0,5]
+    else:
+        yaxis_title = r'$\text{Frequency }\omega\text{ [kHz]}$'
+        yaxis_range = [0,600]
+    if not yrange is None:
+        yaxis_range = yrange
     fig.update_layout(
     autosize=True,
     title=r'$\text{Continuum: }$',
     xaxis_title=r'$\text{Normalized flux }s$',
-    yaxis_title=r'$\text{Frequency }\omega\text{ [kHz]}$',
-    xaxis=dict(range=[np.min([np.min(md.get_flux_surfaces()) for md in modes]), np.max([np.max(md.get_flux_surfaces()) for md in modes])]),
-    yaxis=dict(range=[0, 600]),
+    yaxis_title=yaxis_title,
+    xaxis=dict(range=[
+        np.min([np.min(md.get_flux_surfaces()) for md in modes]),
+        np.max([np.max(md.get_flux_surfaces()) for md in modes])
+        ]
+        ),
+    yaxis=dict(range=yaxis_range),
     legend=dict(
         title=r'$\text{Mode: }$',
         yanchor="top",
