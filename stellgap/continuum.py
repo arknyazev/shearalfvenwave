@@ -1076,6 +1076,47 @@ class AE3DEigenvector:
             for i in range(len(modes_sorted))
         ]
         return AE3DEigenvector(eigenvalue=egn_value, s_coords=eig_mode_asci.s_coords, harmonics=harmonics)
+    
+    def export_to_numpy(self, filename: str, num_harmonics: int = None, resolution_step: int = 1):
+        """
+        Exports the harmonics to a NumPy file.
+
+        Args:
+            filename (str): The name of the file to export to.
+            num_harmonics (int, optional): The number of harmonics to export. If None, all harmonics are exported.
+        """
+        num_harmonics = num_harmonics or len(self.harmonics)
+        harmonics_data = {
+            'eigenvalue': self.eigenvalue,
+            's_coords': self.s_coords[0:-1:resolution_step],
+            'harmonics': np.array([
+                (h.m, h.n, h.amplitudes[0:-1:resolution_step]) for h in self.harmonics[:num_harmonics]
+            ], dtype=object)
+        }
+        np.save(filename, harmonics_data)
+        print(f'Harmonics exported to {filename}')
+
+    @classmethod
+    def load_from_numpy(cls, filename: str):
+        """
+        Loads harmonics from a NumPy file into an AE3DEigenvector instance.
+
+        Args:
+            filename (str): The name of the file to load from.
+
+        Returns:
+            AE3DEigenvector: An instance of AE3DEigenvector with loaded data.
+        """
+        harmonics_data = np.load(filename, allow_pickle=True).item()
+        harmonics = [
+            Harmonic(m=m, n=n, amplitudes=amplitudes) 
+            for m, n, amplitudes in harmonics_data['harmonics']
+        ]
+        return cls(
+            eigenvalue=harmonics_data['eigenvalue'],
+            s_coords=harmonics_data['s_coords'],
+            harmonics=harmonics
+        )
 
 def plot_ae3d_eigenmode(mode: AE3DEigenvector, harmonics: int = 5):
     """

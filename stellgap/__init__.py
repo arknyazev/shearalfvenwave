@@ -5,3 +5,8 @@ from .continuum import FieldBendingMatrix, InertiaMatrix, Omega2Dat, EigModeASCI
 from .continuum import AE3DEigenvector, Harmonic #outputs from AE3D
 from .continuum import FAR3DEigenproblem
 from .continuum import plot_continuum, plot_condition_numbers, data_from_dir, plot_ae3d_eigenmode
+
+try:
+    from .simsopt import saw_from_ae3d
+except ImportError:
+    print("Install SIMSOPT to use simsopt-related functionality")
