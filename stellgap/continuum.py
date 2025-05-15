@@ -1,12 +1,12 @@
 import os
-import numpy as np
-import plotly.graph_objects as go
 import warnings
-
-from dataclasses import dataclass, field
 from typing import List, Tuple
-import f90nml
+from dataclasses import dataclass, field
+import numpy as np
 import scipy.sparse as sp
+import plotly.graph_objects as go
+import f90nml
+
 
 @dataclass
 class FourierDat:
@@ -220,7 +220,6 @@ class ModeContinuum:
         self._n = n
         self._s = s
         self._freq = freq
-
         self._check_matching_freqs()
 
     def _check_matching_freqs(self):
