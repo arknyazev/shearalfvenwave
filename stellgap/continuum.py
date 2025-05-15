@@ -607,6 +607,68 @@ def plot_continuum(modes: List[ModeContinuum], show_legend: bool = False, normal
 )
     return fig
 
+def plot_continua(overlays: List[List[ModeContinuum]], show_legend: bool = False, normalized_modes=False, yrange=None) -> go.Figure:
+    fig = go.Figure()
+    
+    colors = ['blue', 'red', 'green', 'purple']
+    markers = ['circle', 'square', 'diamond', 'cross'] 
+    
+    for idx, modes in enumerate(overlays):
+        color = colors[idx % len(colors)]
+        marker = markers[idx % len(markers)]
+        
+        for md in modes:
+            formatted_freq = [f"{f:.10g}" for f in md.get_frequencies()]
+            fig.add_trace(go.Scatter(
+                x=md.get_flux_surfaces(),
+                y=md.get_frequencies(),
+                mode='markers',
+                name=(f'm={md.get_poloidal_mode()}, '
+                      +f'n={md.get_toroidal_mode()} (Overlay {idx+1})'),
+                marker=dict(size=3, symbol=marker, color=color),
+                line=dict(width=0.5, color=color),
+                text=[(f'freq = {f}, '
+                       +f'm={md.get_poloidal_mode()}, '
+                       +f'n={md.get_toroidal_mode()}') for f in formatted_freq],
+                hoverinfo="text+x+y",
+                hoverlabel=dict(
+                    font_size=16,
+                    bgcolor="white",
+                    bordercolor=color
+                )
+            ))
+
+    if normalized_modes:
+        yaxis_title = r'$\text{normalized frequency }\omega/\omega_A$'
+        yaxis_range = [0, 5]
+    else:
+        yaxis_title = r'$\text{Frequency }\omega\text{ [kHz]}$'
+        yaxis_range = [0, 600]
+    
+    if yrange is not None:
+        yaxis_range = yrange
+    
+    fig.update_layout(
+        autosize=True,
+        title=r'$\text{Continuum: }$',
+        xaxis_title=r'$\text{Normalized flux }s$',
+        yaxis_title=yaxis_title,
+        xaxis=dict(range=[np.min([np.min(md.get_flux_surfaces()) for modes in overlays for md in modes]), 
+                          np.max([np.max(md.get_flux_surfaces()) for modes in overlays for md in modes])]),
+        yaxis=dict(range=yaxis_range),
+        legend=dict(
+            title=r'$\text{Mode: }$',
+            yanchor="top",
+            y=1.4,
+            xanchor="center",
+            x=0.5,
+            orientation="h"
+        ),
+        showlegend=show_legend
+    )
+    
+    return fig
+    
 def plot_condition_numbers(s, condition_numbers):
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=s, y=condition_numbers, mode='lines+markers', name='Condition Number'))
@@ -618,9 +680,9 @@ def plot_condition_numbers(s, condition_numbers):
         xaxis=dict(range=[np.min(s), np.max(s)]),
         yaxis=dict(
             type="log",
-            tickformat=".0e",  # Formats the ticks as 1e+1, 1e+2, etc.
-            exponentformat="e",  # show "e"
-            showexponent='all'  # Ensures all exponents are displayed
+            tickformat=".0e",
+            exponentformat="e",
+            showexponent='all'
         )
     )
     return fig
@@ -1148,11 +1210,36 @@ def plot_ae3d_eigenmode(mode: AE3DEigenvector, harmonics: int = 5):
 
     return fig
 
+def continuum_from_ae3d(ae3d : EigModeASCI, minevalue = 0.0, maxevalue = 600**2):
+    ModeList = []
+    mn_set = set()
 
-import numpy as np
-import scipy.sparse as sp
-from dataclasses import dataclass, field
-import os
+    for evalue in ae3d.egn_values:
+        if evalue < minevalue:
+            continue
+        if evalue > maxevalue:
+            continue
+        evec = AE3DEigenvector.from_eig_mode_asci(ae3d, evalue)
+        m, n = evec.harmonics[0].m, evec.harmonics[0].n
+        if (m, n) in mn_set:
+            for mode in ModeList:
+                if (
+                    (mode.get_poloidal_mode() == m)
+                    and
+                    (mode.get_toroidal_mode() == n)
+                    ):
+                    break
+            mode._s.append(evec.s_coords[np.where(evec.harmonics[0].amplitudes==np.max(evec.harmonics[0].amplitudes))[0][0]])
+            mode._freq.append(np.sqrt(evalue))
+        else:
+            mn_set.add((m, n))
+            ModeList.append(ModeContinuum(
+                n  = evec.harmonics[0].n,
+                m  = evec.harmonics[0].m,
+                s = [evec.s_coords[np.where(evec.harmonics[0].amplitudes==np.max(evec.harmonics[0].amplitudes))[0][0]]],
+                freq = [np.sqrt(evalue)]
+            ))
+    return ModeList
 
 @dataclass
 class FAR3DEigenproblem:
