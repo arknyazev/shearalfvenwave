@@ -656,6 +656,102 @@ class AE3DEigensolver:
         
         np.save(filename, harmonics_data)
         logger.info(f'Harmonics exported to {filename}')
+        
+    def save_to_eig_mode_asci(
+        self,
+        output_dir: str = None,
+        num_eigenmodes: int = None,
+        filename: str = 'egn_mode_asci.dat'
+    ) -> None:
+        """
+        Save eigenvalues and eigenvectors to eig_mode_asci.dat format,
+        compatible with EigModeASCI.
+        
+        This allows for storing the results of eigensolves to be used
+        in the same way as AE3D output.
+        
+        Args:
+            output_dir (str): Directory to save the file in. If None, uses self.sim_dir
+            num_eigenmodes (int): Number of eigenmodes to save. If None, saves all
+            filename (str): Name of the output file
+        """
+        if self.eigenvalues is None or self.eigenvectors is None:
+            raise ValueError("No eigenvalues/eigenvectors computed. "
+                             "Run solve_eigenproblem first.")
+        
+        if not self.modes is not None or self.s_coords is None:
+            raise ValueError("Mode information not available. "
+                             "Cannot save eigenvectors.")
+        
+        if output_dir is None:
+            output_dir = self.sim_dir
+            
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            
+        file_path = os.path.join(output_dir, filename)
+        
+        # Determine how many eigenmodes to save
+        if num_eigenmodes is None:
+            num_eigenmodes = len(self.eigenvalues)
+        else:
+            num_eigenmodes = min(num_eigenmodes, len(self.eigenvalues))
+        
+        # Process eigenvalues:
+        # take real part and sort by magnitude (largest first)
+        real_eigenvalues = np.real(self.eigenvalues)
+        sorted_indices = np.argsort(-np.abs(real_eigenvalues))
+        selected_indices = sorted_indices[:num_eigenmodes]
+        selected_eigenvalues = real_eigenvalues[selected_indices]
+        
+        # Process eigenvectors
+        processed_eigenvectors = []
+        for idx in selected_indices:
+            reshaped_vector = self.reshape_eigenvector(idx)
+            
+            # Use real part of eigenvectors
+            if np.any(np.abs(np.imag(reshaped_vector)) > 1e-10):
+                logger.warning("Found complex components in eigenvector")
+            reshaped_vector = np.real(reshaped_vector)
+            
+            # Normalize the eigenvector
+            max_idx = np.unravel_index(
+                np.argmax(np.abs(reshaped_vector)), 
+                reshaped_vector.shape
+            )
+            normalization = reshaped_vector[max_idx]
+            normalized_vector = reshaped_vector / normalization
+            
+            processed_eigenvectors.append(normalized_vector)
+        
+        # Format data for egn_mode_asci.dat
+        with open(file_path, 'w') as f:
+            # Write the header: num_eigenmodes, num_fourier_modes, num_radial_points
+            f.write(f"{num_eigenmodes}\n")
+            f.write(f"{self.num_fourier_modes}\n")
+            f.write(f"{self.num_radial_points}\n")
+            
+            # Write the modes (m, n)
+            for m, n in zip(self.modes['m'], self.modes['n']):
+                f.write(f"{m}\n{n}\n")
+            
+            # Write the eigenvalues
+            for eigenvalue in selected_eigenvalues:
+                f.write(f"{eigenvalue}\n")
+            
+            # Write the s_coords (radial points)
+            for s in self.s_coords:
+                f.write(f"{s}\n")
+            
+            # Write all eigenvector elements
+            for i in range(num_eigenmodes):
+                vector = processed_eigenvectors[i]
+                for j in range(self.num_radial_points):
+                    for k in range(self.num_fourier_modes):
+                        f.write(f"{vector[j, k]}\n")
+        
+        logger.info(f"Saved {num_eigenmodes} eigenmodes to "
+                    f"{file_path} in EigModeASCI format")
 
 
 def main():
