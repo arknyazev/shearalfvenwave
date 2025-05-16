@@ -697,10 +697,9 @@ class AE3DEigensolver:
         else:
             num_eigenmodes = min(num_eigenmodes, len(self.eigenvalues))
         
-        # Process eigenvalues:
-        # take real part and sort by magnitude (largest first)
+        # Process eigenvalues - sort by real part (largest real part first)
         real_eigenvalues = np.real(self.eigenvalues)
-        sorted_indices = np.argsort(-np.abs(real_eigenvalues))
+        sorted_indices = np.argsort(-real_eigenvalues)  # Negative sign for descending order
         selected_indices = sorted_indices[:num_eigenmodes]
         selected_eigenvalues = real_eigenvalues[selected_indices]
         
