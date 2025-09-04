@@ -1,0 +1,34 @@
+mn_col =    18
+           1           0           2
+           2           1           2
+           3           2           2
+           4           3           2
+           5           4           2
+           6           5           2
+           7           6           2
+           8           7           2
+           9           8           2
+          10           9           2
+          11          10           2
+          12          11           2
+          13          12           2
+          14          13           2
+          15          14           2
+          16          15           2
+          17          16           2
+          18          17           2
+time setup(sec) =  0.16797E+00
+          99          80          80        6400
+        2048          80          80          32          32
+time inertia FT(sec) =  0.13508E+02
+time bending FT(sec) =  0.34477E+02
+time Jparallel FT(sec) =  0.17027E+02
+time inertia blocks(sec) =  0.23945E+01
+time bending blocks(sec) =  0.59883E+01
+time full matrix assembly(sec) =  0.85938E-01
+just before dggev:  0.7375E+02 sec
+just after dggev:  0.1592E+02 sec
+          18          99
+          17          17
+  0.8959754E+04
+  0.9900000E+00

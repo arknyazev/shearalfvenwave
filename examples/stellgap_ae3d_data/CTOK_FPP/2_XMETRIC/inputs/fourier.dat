@@ -1,0 +1,8 @@
+1  80 80  2
+1
+ 2  0 17
+this file is read by xmetric to determine grid resolution in 
+theza and zeta Boozer angles.
+
+it is then read by simsopt to infer grid resolution from xmetric,
+and setup dynamic modes
