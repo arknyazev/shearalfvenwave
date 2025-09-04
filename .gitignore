@@ -1,8 +1,6 @@
 **/.DS_Store
 *.egg-info/
 __pycache__
-examples/stellgap_ae3d_data/CTOK_FPP/2_XMETRIC/outputs/*.dat
-examples/stellgap_ae3d_data/CTOK_FPP/2_XMETRIC/outputs/
 build/
 *.egg-info/
 __pycache__/

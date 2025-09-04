@@ -1,0 +1,2 @@
+examples/stellgap_ae3d_data/CTOK_FPP/2_XMETRIC/outputs/ae_metric.dat filter=lfs diff=lfs merge=lfs -text
+examples/stellgap_ae3d_data/CTOK_FPP/2_XMETRIC/outputs/tae_data_boozer filter=lfs diff=lfs merge=lfs -text
