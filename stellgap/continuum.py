@@ -220,12 +220,6 @@ class ModeContinuum:
         self._n = n
         self._s = s
         self._freq = freq
-        self._check_matching_freqs()
-
-    def _check_matching_freqs(self):
-        if not (self._s.size == 0 and self._s.size == 0):
-            if bool(self._s.size == 0) != bool(self._freq.size == 0) or (np.shape(self._s) != np.shape(self._freq)):
-                raise Exception("The number of flux surfaces and number of frequencies provided must be the same")
         
     def _check_negative_s(self):
         for s in self._s:
@@ -244,8 +238,6 @@ class ModeContinuum:
     def set_points(self, s: np.array, freq: np.array):
         self._s = s
         self._freq = freq
-
-        self._check_matching_freqs()
 
     def get_poloidal_mode(self):
         return self._m
